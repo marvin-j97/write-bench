@@ -2,6 +2,8 @@ use heed::EnvFlags;
 use std::{fs::create_dir_all, time::Instant};
 use uuid::Uuid;
 
+const ITEMS: usize = 11_000_000;
+
 /// Compute the blake2 of a slice
 pub fn blake2sum(data: &[u8]) -> [u8; 32] {
     use blake2::{Blake2b512, Digest};
@@ -24,7 +26,7 @@ fn main() {
 
         let env = unsafe {
             heed::EnvOpenOptions::new()
-                .map_size(16_000_000_000)
+                .map_size(20_000_000_000)
                 .flags(EnvFlags::NO_SYNC | EnvFlags::NO_READ_AHEAD)
                 .open("heed")
                 .unwrap()
@@ -36,7 +38,7 @@ fn main() {
         wtx.commit().unwrap();
 
         let start = Instant::now();
-        for idx in 0..11_000_000 {
+        for idx in 0..ITEMS {
             key.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
             key.extend(Uuid::new_v4().as_u128().to_be_bytes());
 
@@ -64,7 +66,7 @@ fn main() {
             .unwrap();
 
         let start = Instant::now();
-        for idx in 0..11_000_000 {
+        for idx in 0..ITEMS {
             key.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
             key.extend(Uuid::new_v4().as_u128().to_be_bytes());
 
