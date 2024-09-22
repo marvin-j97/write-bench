@@ -3,6 +3,7 @@ use std::{fs::create_dir_all, time::Instant};
 use uuid::Uuid;
 
 const ITEMS: usize = 11_000_000;
+const CLEAN: bool = false;
 
 /// Compute the blake2 of a slice
 pub fn blake2sum(data: &[u8]) -> [u8; 32] {
@@ -61,14 +62,18 @@ fn main() {
             wtx.commit().unwrap();
 
             if idx % 1_000_000 == 0 {
-                println!("{idx}");
+                println!("{idx} after {:?}", start.elapsed());
             }
         }
         println!("done in {:?}", start.elapsed());
+
+        if CLEAN {
+            std::fs::remove_dir_all("heed").unwrap();
+        }
     } else {
         println!("-- fjall --");
 
-        let keyspace = fjall::Config::default().temporary(true).open().unwrap();
+        let keyspace = fjall::Config::default().temporary(CLEAN).open().unwrap();
         let db = keyspace
             .open_partition("block_refs", Default::default())
             .unwrap();
@@ -80,7 +85,7 @@ fn main() {
             db.insert(&key, &val).unwrap();
 
             if idx % 1_000_000 == 0 {
-                println!("{idx}");
+                println!("{idx} after {:?}", start.elapsed());
             }
         }
         println!("done in {:?}", start.elapsed());
