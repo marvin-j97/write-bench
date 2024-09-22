@@ -54,7 +54,7 @@ fn main() {
 
         let start = Instant::now();
         for idx in 0..ITEMS {
-            kv(&mut key, &mut val):
+            kv(&mut key, &mut val);
 
             let mut wtx = env.write_txn().unwrap();
             db.put(&mut wtx, &key, &val).unwrap();
@@ -75,7 +75,7 @@ fn main() {
 
         let start = Instant::now();
         for idx in 0..ITEMS {
-            kv(&mut key, &mut val):
+            kv(&mut key, &mut val);
 
             db.insert(&key, &val).unwrap();
 
