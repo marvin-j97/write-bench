@@ -16,6 +16,17 @@ pub fn blake2sum(data: &[u8]) -> [u8; 32] {
     hash
 }
 
+fn kv(k: &mut Vec<u8>, v: &mut Vec<u8>) {
+    k.clear();
+    v.clear();
+    
+    k.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
+    k.extend(Uuid::new_v4().as_u128().to_be_bytes());
+
+    v.extend(&k);
+    v.push(0u8);
+}
+
 fn main() {
     let mut key: Vec<u8> = Vec::new();
     let mut val: Vec<u8> = Vec::with_capacity(100);
@@ -39,18 +50,11 @@ fn main() {
 
         let start = Instant::now();
         for idx in 0..ITEMS {
-            key.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
-            key.extend(Uuid::new_v4().as_u128().to_be_bytes());
-
-            val.extend(&key);
-            val.push(0u8);
+            kv(&mut key, &mut val):
 
             let mut wtx = env.write_txn().unwrap();
             db.put(&mut wtx, &key, &val).unwrap();
             wtx.commit().unwrap();
-
-            key.clear();
-            val.clear();
 
             if idx % 1_000_000 == 0 {
                 println!("{idx}");
@@ -67,16 +71,9 @@ fn main() {
 
         let start = Instant::now();
         for idx in 0..ITEMS {
-            key.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
-            key.extend(Uuid::new_v4().as_u128().to_be_bytes());
-
-            val.extend(&key);
-            val.push(0u8);
+            kv(&mut key, &mut val):
 
             db.insert(&key, &val).unwrap();
-
-            key.clear();
-            val.clear();
 
             if idx % 1_000_000 == 0 {
                 println!("{idx}");
