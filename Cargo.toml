@@ -1,0 +1,10 @@
+[package]
+name = "ap"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+blake2 = "0.10.6"
+fjall = "2.0.0"
+heed = "0.20.5"
+uuid = { version = "1.10.0", features = ["v4"] }
