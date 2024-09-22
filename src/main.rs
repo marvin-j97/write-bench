@@ -18,66 +18,68 @@ fn main() {
     let mut key: Vec<u8> = Vec::new();
     let mut val: Vec<u8> = Vec::with_capacity(100);
 
-    println!("-- heed --");
-    create_dir_all("heed").unwrap();
+    if std::env::args().any(|x| x.contains("--heed")) {
+        println!("-- heed --");
+        create_dir_all("heed").unwrap();
 
-    let env = unsafe {
-        heed::EnvOpenOptions::new()
-            .map_size(16_000_000_000)
-            .flags(EnvFlags::NO_SYNC | EnvFlags::NO_READ_AHEAD)
-            .open("heed")
-            .unwrap()
-    };
-
-    let mut wtx = env.write_txn().unwrap();
-    let db: heed::Database<heed::types::Bytes, heed::types::Bytes> =
-        env.create_database(&mut wtx, None).unwrap();
-    wtx.commit().unwrap();
-
-    let start = Instant::now();
-    for idx in 0..11_000_000 {
-        key.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
-        key.extend(Uuid::new_v4().as_u128().to_be_bytes());
-
-        val.extend(&key);
-        val.push(0u8);
+        let env = unsafe {
+            heed::EnvOpenOptions::new()
+                .map_size(16_000_000_000)
+                .flags(EnvFlags::NO_SYNC | EnvFlags::NO_READ_AHEAD)
+                .open("heed")
+                .unwrap()
+        };
 
         let mut wtx = env.write_txn().unwrap();
-        db.put(&mut wtx, &key, &val).unwrap();
+        let db: heed::Database<heed::types::Bytes, heed::types::Bytes> =
+            env.create_database(&mut wtx, None).unwrap();
         wtx.commit().unwrap();
 
-        key.clear();
-        val.clear();
+        let start = Instant::now();
+        for idx in 0..11_000_000 {
+            key.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
+            key.extend(Uuid::new_v4().as_u128().to_be_bytes());
 
-        if idx % 1_000_000 == 0 {
-            println!("{idx}");
+            val.extend(&key);
+            val.push(0u8);
+
+            let mut wtx = env.write_txn().unwrap();
+            db.put(&mut wtx, &key, &val).unwrap();
+            wtx.commit().unwrap();
+
+            key.clear();
+            val.clear();
+
+            if idx % 1_000_000 == 0 {
+                println!("{idx}");
+            }
         }
-    }
-    println!("done in {:?}", start.elapsed());
+        println!("done in {:?}", start.elapsed());
+    } else {
+        println!("-- fjall --");
 
-    println!("-- fjall --");
+        let keyspace = fjall::Config::default().temporary(true).open().unwrap();
+        let db = keyspace
+            .open_partition("block_refs", Default::default())
+            .unwrap();
 
-    let keyspace = fjall::Config::default().temporary(true).open().unwrap();
-    let db = keyspace
-        .open_partition("block_refs", Default::default())
-        .unwrap();
+        let start = Instant::now();
+        for idx in 0..11_000_000 {
+            key.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
+            key.extend(Uuid::new_v4().as_u128().to_be_bytes());
 
-    let start = Instant::now();
-    for idx in 0..11_000_000 {
-        key.extend(blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec());
-        key.extend(Uuid::new_v4().as_u128().to_be_bytes());
+            val.extend(&key);
+            val.push(0u8);
 
-        val.extend(&key);
-        val.push(0u8);
+            db.insert(&key, &val).unwrap();
 
-        db.insert(&key, &val).unwrap();
+            key.clear();
+            val.clear();
 
-        key.clear();
-        val.clear();
-
-        if idx % 1_000_000 == 0 {
-            println!("{idx}");
+            if idx % 1_000_000 == 0 {
+                println!("{idx}");
+            }
         }
+        println!("done in {:?}", start.elapsed());
     }
-    println!("done in {:?}", start.elapsed());
 }
