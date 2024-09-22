@@ -41,7 +41,7 @@ fn main() {
 
         let env = unsafe {
             heed::EnvOpenOptions::new()
-                .map_size(20_000_000_000)
+                .map_size(24_000_000_000)
                 .flags(EnvFlags::NO_SYNC | EnvFlags::NO_READ_AHEAD)
                 .open("heed")
                 .unwrap()
