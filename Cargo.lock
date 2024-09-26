@@ -296,6 +296,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 
 [[package]]
+name = "jemalloc"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd5927dc2630919333682c1757ed2d1518f510336096d0f43f0426a0f776f8e6"
+dependencies = [
+ "loca",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -316,6 +325,15 @@ dependencies = [
  "cc",
  "doxygen-rs",
  "libc",
+]
+
+[[package]]
+name = "loca"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "669389264b730a98e0d11713d0260f0ab363ad7e50ffc6d36db9c75bb7a5e527"
+dependencies = [
+ "ptr",
 ]
 
 [[package]]
@@ -490,6 +508,12 @@ checksum = "5e719e8df665df0d1c8fbfd238015744736151d4445ec0836b8e628aae103b77"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "ptr"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76208293e44a44a702aa22f5cf40e2e55f4a6cd19953ddadb0b3f68e337d87ce"
 
 [[package]]
 name = "quick_cache"
@@ -897,6 +921,7 @@ dependencies = [
  "blake2",
  "fjall",
  "heed",
+ "jemalloc",
  "rand",
  "uuid",
  "zipf",

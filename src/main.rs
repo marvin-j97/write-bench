@@ -1,8 +1,12 @@
+use jemallocator::Jemalloc;
 use std::{fs::create_dir_all, sync::Arc, time::Instant};
 
 const ITEMS: usize = 11_000_000;
 const CLEAN: bool = true;
 const ZIPF_E: f64 = 1.2;
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 /// Compute the blake2 of a slice
 pub fn blake2sum(data: &[u8]) -> [u8; 32] {
