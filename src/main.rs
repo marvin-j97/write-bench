@@ -1,9 +1,8 @@
-use heed::EnvFlags;
-use std::{fs::create_dir_all, time::Instant};
-use uuid::Uuid;
+use std::{fs::create_dir_all, sync::Arc, time::Instant};
 
 const ITEMS: usize = 11_000_000;
-const CLEAN: bool = false;
+const CLEAN: bool = true;
+const ZIPF_E: f64 = 1.2;
 
 /// Compute the blake2 of a slice
 pub fn blake2sum(data: &[u8]) -> [u8; 32] {
@@ -18,12 +17,14 @@ pub fn blake2sum(data: &[u8]) -> [u8; 32] {
 }
 
 fn kv(k: &mut Vec<u8>, v: &mut Vec<u8>) {
+    use uuid::Uuid;
+
     k.clear();
     v.clear();
 
     let pk = blake2sum(&Uuid::new_v4().as_u128().to_be_bytes()).to_vec();
     let sk = Uuid::new_v4().as_u128().to_be_bytes();
-    
+
     k.extend(&pk);
     k.extend(&sk);
 
@@ -36,11 +37,17 @@ fn main() {
     let mut key: Vec<u8> = Vec::new();
     let mut val: Vec<u8> = Vec::with_capacity(100);
 
+    // NOTE: We need to memorize some keys to read back
+    let mut keys = Vec::with_capacity(ITEMS / 100);
+
     if std::env::args().any(|x| x.contains("--heed")) {
         println!("-- heed --");
+
         create_dir_all("heed").unwrap();
 
         let env = unsafe {
+            use heed::EnvFlags;
+
             heed::EnvOpenOptions::new()
                 .map_size(24_000_000_000)
                 .flags(EnvFlags::NO_SYNC | EnvFlags::NO_READ_AHEAD)
@@ -53,41 +60,160 @@ fn main() {
             env.create_database(&mut wtx, None).unwrap();
         wtx.commit().unwrap();
 
-        let start = Instant::now();
-        for idx in 0..ITEMS {
-            kv(&mut key, &mut val);
+        {
+            println!("-- write --");
 
-            let mut wtx = env.write_txn().unwrap();
-            db.put(&mut wtx, &key, &val).unwrap();
-            wtx.commit().unwrap();
+            let start = Instant::now();
 
-            if idx % 1_000_000 == 0 {
-                println!("{idx} after {:?}", start.elapsed());
+            for idx in 0..ITEMS {
+                kv(&mut key, &mut val);
+
+                let mut wtx = env.write_txn().unwrap();
+                db.put(&mut wtx, &key, &val).unwrap();
+                wtx.commit().unwrap();
+
+                if idx % 100 == 0 {
+                    keys.push(key.clone());
+                }
+
+                if idx > 0 && idx % 1_000_000 == 0 {
+                    let elapsed = start.elapsed();
+                    let ns_per_item = elapsed.as_nanos() / idx as u128;
+                    println!(
+                        "{idx} after {:?}, avg={:?}",
+                        start.elapsed(),
+                        std::time::Duration::from_nanos(ns_per_item as u64)
+                    );
+                }
             }
+
+            let elapsed = start.elapsed();
+            let ns_per_item = elapsed.as_nanos() / ITEMS as u128;
+            println!(
+                "done in {elapsed:?}, avg={:?}",
+                std::time::Duration::from_nanos(ns_per_item as u64)
+            );
         }
-        println!("done in {:?}", start.elapsed());
+
+        {
+            println!("-- read --");
+
+            let mut rng = rand::thread_rng();
+            let zipf = zipf::ZipfDistribution::new(keys.len() - 1, ZIPF_E).unwrap();
+
+            let start = Instant::now();
+
+            for idx in 0..10_000_000 {
+                use rand::distributions::Distribution;
+
+                let sample = zipf.sample(&mut rng);
+                let key = &keys[sample];
+
+                let rtx = env.read_txn().unwrap();
+                db.get(&rtx, key).unwrap().unwrap();
+
+                if idx > 0 && idx % 1_000_000 == 0 {
+                    let elapsed = start.elapsed();
+                    let ns_per_item = elapsed.as_nanos() / idx as u128;
+                    println!(
+                        "{idx} after {:?}, avg={:?}",
+                        start.elapsed(),
+                        std::time::Duration::from_nanos(ns_per_item as u64)
+                    );
+                }
+            }
+
+            let elapsed = start.elapsed();
+            let ns_per_item = elapsed.as_nanos() / ITEMS as u128;
+            println!(
+                "done in {elapsed:?}, avg={:?}",
+                std::time::Duration::from_nanos(ns_per_item as u64)
+            );
+        }
 
         if CLEAN {
             std::fs::remove_dir_all("heed").unwrap();
         }
     } else {
+        use fjall::BlockCache;
+
         println!("-- fjall --");
 
-        let keyspace = fjall::Config::default().temporary(CLEAN).open().unwrap();
+        let keyspace = fjall::Config::default()
+            .block_cache(Arc::new(BlockCache::with_capacity_bytes(600_000_000)))
+            .temporary(CLEAN)
+            .open()
+            .unwrap();
+
         let db = keyspace
             .open_partition("block_refs", Default::default())
             .unwrap();
 
-        let start = Instant::now();
-        for idx in 0..ITEMS {
-            kv(&mut key, &mut val);
+        {
+            println!("-- write --");
 
-            db.insert(&key, &val).unwrap();
+            let start = Instant::now();
+            for idx in 0..ITEMS {
+                kv(&mut key, &mut val);
 
-            if idx % 1_000_000 == 0 {
-                println!("{idx} after {:?}", start.elapsed());
+                db.insert(&key, &val).unwrap();
+
+                if idx % 100 == 0 {
+                    keys.push(key.clone());
+                }
+
+                if idx > 0 && idx % 1_000_000 == 0 {
+                    let elapsed = start.elapsed();
+                    let ns_per_item = elapsed.as_nanos() / idx as u128;
+                    println!(
+                        "{idx} after {:?}, avg={:?}",
+                        start.elapsed(),
+                        std::time::Duration::from_nanos(ns_per_item as u64)
+                    );
+                }
             }
+
+            let elapsed = start.elapsed();
+            let ns_per_item = elapsed.as_nanos() / ITEMS as u128;
+            println!(
+                "done in {elapsed:?}, avg={:?}",
+                std::time::Duration::from_nanos(ns_per_item as u64)
+            );
         }
-        println!("done in {:?}", start.elapsed());
+
+        {
+            println!("-- read --");
+
+            let mut rng = rand::thread_rng();
+            let zipf = zipf::ZipfDistribution::new(keys.len() - 1, ZIPF_E).unwrap();
+
+            let start = Instant::now();
+
+            for idx in 0..20_000_000 {
+                use rand::distributions::Distribution;
+
+                let sample = zipf.sample(&mut rng);
+                let key = &keys[sample];
+
+                db.get(key).unwrap().unwrap();
+
+                if idx > 0 && idx % 1_000_000 == 0 {
+                    let elapsed = start.elapsed();
+                    let ns_per_item = elapsed.as_nanos() / idx as u128;
+                    println!(
+                        "{idx} after {:?}, avg={:?}",
+                        start.elapsed(),
+                        std::time::Duration::from_nanos(ns_per_item as u64)
+                    );
+                }
+            }
+
+            let elapsed = start.elapsed();
+            let ns_per_item = elapsed.as_nanos() / ITEMS as u128;
+            println!(
+                "done in {elapsed:?}, avg={:?}",
+                std::time::Duration::from_nanos(ns_per_item as u64)
+            );
+        }
     }
 }
