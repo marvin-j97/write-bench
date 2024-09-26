@@ -147,7 +147,7 @@ fn main() {
         println!("-- fjall --");
 
         let keyspace = fjall::Config::default()
-            .block_cache(Arc::new(BlockCache::with_capacity_bytes(600_000_000)))
+            .block_cache(Arc::new(BlockCache::with_capacity_bytes(256_000_000)))
             .temporary(CLEAN)
             .open()
             .unwrap();
