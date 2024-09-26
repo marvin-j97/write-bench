@@ -1,10 +1,13 @@
-use jemallocator::Jemalloc;
 use std::{fs::create_dir_all, sync::Arc, time::Instant};
 
 const ITEMS: usize = 11_000_000;
 const CLEAN: bool = true;
 const ZIPF_E: f64 = 1.2;
 
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 

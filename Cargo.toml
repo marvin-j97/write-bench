@@ -7,7 +7,7 @@ edition = "2021"
 blake2 = "0.10.6"
 fjall = "2.0.2"
 heed = "0.20.5"
-jemalloc = "0.3.0"
 rand = "0.8.5"
 uuid = { version = "1.10.0", features = ["v4"] }
 zipf = "7.0.1"
+jemallocator = "0.5.4"
