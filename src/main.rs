@@ -1,6 +1,6 @@
 use std::{fs::create_dir_all, sync::Arc, time::Instant};
 
-const ITEMS: usize = 11_000_000;
+const ITEMS: usize = 10_000_000;
 const CLEAN: bool = true;
 const ZIPF_E: f64 = 1.2;
 
@@ -141,13 +141,13 @@ fn main() {
         if CLEAN {
             std::fs::remove_dir_all("heed").unwrap();
         }
-    } else {
+    } else if std::env::args().any(|x| x.contains("--fjall")) {
         use fjall::BlockCache;
 
         println!("-- fjall --");
 
         let keyspace = fjall::Config::default()
-            .block_cache(Arc::new(BlockCache::with_capacity_bytes(256_000_000)))
+            .block_cache(Arc::new(BlockCache::with_capacity_bytes(128_000_000)))
             .temporary(CLEAN)
             .open()
             .unwrap();
@@ -196,7 +196,7 @@ fn main() {
 
             let start = Instant::now();
 
-            for idx in 0..20_000_000 {
+            for idx in 0..(ITEMS * 2) {
                 use rand::distributions::Distribution;
 
                 let sample = zipf.sample(&mut rng);
@@ -216,11 +216,109 @@ fn main() {
             }
 
             let elapsed = start.elapsed();
+            let ns_per_item = elapsed.as_nanos() / (ITEMS * 2) as u128;
+            println!(
+                "done in {elapsed:?}, avg={:?}",
+                std::time::Duration::from_nanos(ns_per_item as u64)
+            );
+        }
+    } else if std::env::args().any(|x| x.contains("--canopy")) {
+        use canopydb::Database;
+
+        println!("-- canopydb --");
+
+        create_dir_all("canopydb").unwrap();
+
+        let mut opts = canopydb::EnvOptions::new("canopydb");
+        opts.disable_fsync = true;
+        opts.page_cache_size = 128_000_000;
+
+        let db = Database::with_options(opts, canopydb::DbOptions::default()).unwrap();
+
+        let tx = db.begin_write().unwrap();
+        {
+            let _tree = tx.get_or_create_tree(b"default").unwrap();
+        }
+        tx.commit().unwrap();
+
+        {
+            println!("-- write --");
+
+            let start = Instant::now();
+            for idx in 0..ITEMS {
+                kv(&mut key, &mut val);
+
+                let tx = db.begin_write().unwrap();
+                {
+                    let mut tree = tx.get_or_create_tree(b"default").unwrap();
+                    tree.insert(&key, &val).unwrap();
+                }
+                tx.commit().unwrap();
+
+                if idx % 100 == 0 {
+                    keys.push(key.clone());
+                }
+
+                if idx > 0 && idx % 1_000_000 == 0 {
+                    let elapsed = start.elapsed();
+                    let ns_per_item = elapsed.as_nanos() / idx as u128;
+                    println!(
+                        "{idx} after {:?}, avg={:?}",
+                        start.elapsed(),
+                        std::time::Duration::from_nanos(ns_per_item as u64)
+                    );
+                }
+            }
+
+            let elapsed = start.elapsed();
             let ns_per_item = elapsed.as_nanos() / ITEMS as u128;
             println!(
                 "done in {elapsed:?}, avg={:?}",
                 std::time::Duration::from_nanos(ns_per_item as u64)
             );
+        }
+
+        {
+            println!("-- read --");
+
+            let mut rng = rand::thread_rng();
+            let zipf = zipf::ZipfDistribution::new(keys.len() - 1, ZIPF_E).unwrap();
+
+            let start = Instant::now();
+
+            for idx in 0..(ITEMS * 2) {
+                use rand::distributions::Distribution;
+
+                let sample = zipf.sample(&mut rng);
+                let key = &keys[sample];
+
+                {
+                    let rx = db.begin_read().unwrap();
+                    let tree = rx.get_tree(b"default").unwrap().unwrap();
+                    tree.get(key).unwrap().unwrap();
+                }
+
+                if idx > 0 && idx % 1_000_000 == 0 {
+                    let elapsed = start.elapsed();
+                    let ns_per_item = elapsed.as_nanos() / idx as u128;
+                    println!(
+                        "{idx} after {:?}, avg={:?}",
+                        start.elapsed(),
+                        std::time::Duration::from_nanos(ns_per_item as u64)
+                    );
+                }
+            }
+
+            let elapsed = start.elapsed();
+            let ns_per_item = elapsed.as_nanos() / (ITEMS * 2) as u128;
+            println!(
+                "done in {elapsed:?}, avg={:?}",
+                std::time::Duration::from_nanos(ns_per_item as u64)
+            );
+        }
+
+        if CLEAN {
+            std::fs::remove_dir_all("canopydb").unwrap();
         }
     }
 }

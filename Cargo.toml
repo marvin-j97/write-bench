@@ -5,9 +5,10 @@ edition = "2021"
 
 [dependencies]
 blake2 = "0.10.6"
-fjall = "2.0.2"
+fjall = "2.2.0"
 heed = "0.20.5"
 rand = "0.8.5"
 uuid = { version = "1.10.0", features = ["v4"] }
 zipf = "7.0.1"
 jemallocator = "0.5.4"
+canopydb = "0.1.0"
